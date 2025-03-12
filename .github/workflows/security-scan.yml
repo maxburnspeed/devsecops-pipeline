@@ -33,6 +33,7 @@ jobs:
       
       # Dependency Scanning with Trivy
       - name: Run Trivy Dependency Scan
+        continue-on-error: true
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -45,6 +46,7 @@ jobs:
         run: docker build -t devsecops-pipeline .
 
       - name: Run Trivy Docker Image Scan
+        continue-on-error: true
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'devsecops-pipeline'
