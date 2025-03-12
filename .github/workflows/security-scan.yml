@@ -1,0 +1,53 @@
+name: Security Scanning Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security_scan:
+    name: Run Security Scans
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          pip install --no-cache-dir -r requirements.txt
+
+      # Static Application Security Testing (SAST) with Semgrep
+      - name: Run Semgrep SAST Scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: p/ci
+          audit_on: high
+
+      # Dependency Scanning with Trivy
+      - name: Run Trivy Dependency Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+
+      # Docker Image Security Scanning
+      - name: Build Docker Image
+        run: docker build -t devsecops-pipeline .
+
+      - name: Run Trivy Docker Image Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'devsecops-pipeline'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
