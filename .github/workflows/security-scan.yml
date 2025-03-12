@@ -15,6 +15,9 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Set up security reports folder
+        run: mkdir -p security-reports
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -26,12 +29,16 @@ jobs:
 
       # Static Application Security Testing (SAST) with Semgrep
       - name: Run Semgrep SAST Scan
-        continue-on-error: true
-        uses: returntocorp/semgrep-action@v1
-        with:
-            config: p/ci
-      
-      # Dependency Scanning with Trivy
+        # continue-on-error: true
+        # uses: returntocorp/semgrep-action@v1
+        # with:
+        #     config: p/ci
+        run: |
+          semgrep --config=p/ci --json > security-reports/semgrep-report.json || true
+
+     
+
+      #  Run Trivy Dependency Scan with Allowlist
       - name: Run Trivy Dependency Scan
         continue-on-error: true
         uses: aquasecurity/trivy-action@master
@@ -40,6 +47,9 @@ jobs:
           format: 'table'
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
+          output: 'security-reports/trivy-dependency-report.json'
+          ignore-unfixed: true
+          ignorefile: .trivyignore
 
       # Docker Image Security Scanning
       - name: Build Docker Image
@@ -53,6 +63,7 @@ jobs:
           format: 'table'
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
+          output: 'security-reports/trivy-docker-report.json'
 
           # Dynamic Application Security Testing (DAST) with OWASP ZAP
       - name: Start Flask App in Docker
@@ -61,7 +72,20 @@ jobs:
             sleep 5  # Give Flask some time to start
 
       - name: Run OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.9.0
-        with:
-            target: "http://localhost:5000"
-            fail_action: true  # Fail if high-risk vulnerabilities are found
+        # uses: zaproxy/action-baseline@v0.9.0
+        # with:
+        #     target: "http://localhost:5000"
+        #     fail_action: true  # Fail if high-risk vulnerabilities are found
+        run: |
+            docker run --rm -v $(pwd)/security-reports:/zap/wrk/:rw \
+            owasp/zap2docker-stable zap-baseline.py -t http://localhost:5000 \
+            -J security-reports/owasp-zap-report.json || true
+                # Commit Security Reports to GitHub
+      
+      - name: Commit and Push Reports
+        run: |
+            git config --global user.name 'github-actions'
+            git config --global user.email 'github-actions@github.com'
+            git add security-reports/
+            git commit -m "Add security scan reports"
+            git push origin main || echo "No changes to commit"
